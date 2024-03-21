@@ -1,4 +1,4 @@
-#![no_std]
+// #![no_std]
 
 extern crate alloc;
 
@@ -398,13 +398,51 @@ impl Group for G1 {
     }
 }
 
-impl Add<G1> for G1 {
-    type Output = G1;
+pub fn testtt(a: G1, b: G1){
+    let a = a.0.to_affine().unwrap();
+    let b = b.0.to_affine().unwrap();
 
-    fn add(self, other: G1) -> G1 {
-        G1(self.0 + other.0)
+    println!("{:?}, {:?}", a, b);
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "zkvm_backend")] {
+        impl Add<G1> for G1 {
+            type Output = G1;
+        
+            fn add(self, other: G1) -> G1 {
+                let a = self.0.to_affine();
+                G1(self.0 + other.0)
+            }
+        }
+        
+        impl Mul<Fr> for G1 {
+            type Output = G1;
+        
+            fn mul(self, other: Fr) -> G1 {
+                G1(self.0 * other.0)
+            }
+        }
+    } else {
+        impl Add<G1> for G1 {
+            type Output = G1;
+        
+            fn add(self, other: G1) -> G1 {
+                G1(self.0 + other.0)
+            }
+        }
+        
+        impl Mul<Fr> for G1 {
+            type Output = G1;
+        
+            fn mul(self, other: Fr) -> G1 {
+                G1(self.0 * other.0)
+            }
+        }
     }
 }
+
+
 
 impl Sub<G1> for G1 {
     type Output = G1;
@@ -422,13 +460,7 @@ impl Neg for G1 {
     }
 }
 
-impl Mul<Fr> for G1 {
-    type Output = G1;
 
-    fn mul(self, other: Fr) -> G1 {
-        G1(self.0 * other.0)
-    }
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
