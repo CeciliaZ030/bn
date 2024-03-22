@@ -11,8 +11,8 @@ license = "MIT OR Apache-2.0"
 edition = "2018"
 
 [features]
-default = []
-zkvm_backend = []
+default = ["zkvm-backend"]
+zkvm-backend = []
 
 [[bench]]
 name = "api"
