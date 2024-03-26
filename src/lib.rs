@@ -1,16 +1,20 @@
-#![no_std]
+// #![no_std]
 
 extern crate alloc;
 
 pub mod arith;
 mod fields;
 mod groups;
+#[cfg(feature = "zkvm-backend")]
+mod succinct;
 
 use crate::fields::FieldElement;
 use crate::groups::{GroupElement, G1Params, G2Params, GroupParams};
 
 use alloc::vec::Vec;
+use arith::U256;
 use core::ops::{Add, Mul, Neg, Sub};
+use std::fs::read;
 use rand::Rng;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -398,13 +402,72 @@ impl Group for G1 {
     }
 }
 
-impl Add<G1> for G1 {
-    type Output = G1;
 
-    fn add(self, other: G1) -> G1 {
-        G1(self.0 + other.0)
+cfg_if::cfg_if! {
+    if #[cfg(feature = "zkvm-backend")] {
+        use succinct::{syscall_bn254_add, syscall_bn254_double, point_to_le, le_to_point};
+        
+        impl Add<G1> for G1 {
+            type Output = G1;
+        
+            fn add(self, other: G1) -> G1 {
+                
+                let mut a = point_to_le(&self).expect("G1 to bytes failed");
+                let b = point_to_le(&other).expect("G1 to bytes failed");
+            
+                unsafe {
+                    syscall_bn254_add(a.as_mut_ptr() as *mut u32, b.as_ptr() as *const u32);
+                }
+                le_to_point(&a).expect("G1 from bytes failed")
+            }
+        }
+
+        impl Mul<Fr> for G1 {
+            type Output = G1;
+
+            fn mul(self, other: Fr) -> G1 {
+                let mut a = point_to_le(&G1::zero()).unwrap();
+                let mut found_one = false;
+            
+                for i in U256::from(other.0).bits() {
+                    if found_one {
+                        unsafe {
+                            syscall_bn254_double(a.as_mut_ptr() as *mut u32);
+                        }
+                    }
+                    if i {
+                        found_one = true;
+                        let mut a_tmp = le_to_point(&a).unwrap();
+                        a_tmp = a_tmp + self;
+                        a = point_to_le(&a_tmp).unwrap();
+                    }
+                }
+                le_to_point(&a).unwrap()
+            }
+        }
+
+
+
+    } else {
+        impl Add<G1> for G1 {
+            type Output = G1;
+        
+            fn add(self, other: G1) -> G1 {
+                G1(self.0 + other.0)
+            }
+        }
+        
+        impl Mul<Fr> for G1 {
+            type Output = G1;
+        
+            fn mul(self, other: Fr) -> G1 {
+                G1(self.0 * other.0)
+            }
+        }
     }
 }
+
+
 
 impl Sub<G1> for G1 {
     type Output = G1;
@@ -422,13 +485,7 @@ impl Neg for G1 {
     }
 }
 
-impl Mul<Fr> for G1 {
-    type Output = G1;
 
-    fn mul(self, other: Fr) -> G1 {
-        G1(self.0 * other.0)
-    }
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
